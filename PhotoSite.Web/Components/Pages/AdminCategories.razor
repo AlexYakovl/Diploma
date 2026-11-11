@@ -1,0 +1,441 @@
+@page "/admin/categories"
+@layout AdminLayout
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Navigation
+@inject ApiService Api
+
+<AuthGuard>
+    <input type="file"
+           id="adminCategoryCoverInput"
+           @ref="_categoryCoverInputRef"
+           accept=".jpg,.jpeg,.png,.webp"
+           style="display:none"
+           disabled="@CategoriesBusy"
+           @onchange="OnCategoryCoverPicked" />
+
+    <header class="admin-page-header">
+        <div>
+            <h1 class="admin-page-header__title">Категории</h1>
+            <p class="admin-page-header__subtitle">Категории портфолио: порядок, названия и обложки.</p>
+        </div>
+        <div></div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="admin-error-box" style="margin-bottom:12px;">@_error</div>
+    }
+
+    @if (_uploadingCoverCategoryId is int upId)
+    {
+        <div class="photosite-upload-progress" style="margin-bottom:14px; max-width:820px;">
+            <div class="photosite-upload-progress__label">@_categoryCoverUploadLabel</div>
+            <div class="photosite-upload-progress__track">
+                <div class="photosite-upload-progress__fill" style="width:@($"{_categoryCoverUploadPct:0}%")"></div>
+            </div>
+            <div class="photosite-upload-progress__pct">Категория #@upId · @_categoryCoverUploadPct.ToString("0")%</div>
+        </div>
+    }
+
+    <div class="admin-card admin-card--padded-lg">
+        @if (_loading)
+        {
+            <div class="admin-help">Загрузка...</div>
+        }
+        else
+        {
+            <div class="admin-list @(CategoriesBusy ? "admin-list--busy" : null)" style="max-width:820px;">
+                <div class="admin-row admin-row--create admin-dotgrid @(CategoriesBusy ? "admin-row--disabled" : null)" role="button" tabindex="0" @onclick="OpenCreate">
+                    <div style="min-width:0;">
+                        <div class="admin-row__title" style="display:flex; align-items:center; gap:10px;">
+                            <span class="admin-row__plus" aria-hidden="true">+</span>
+                            Создать категорию
+                        </div>
+                        <div class="admin-row__meta">Название, порядок, обложка</div>
+                    </div>
+                    <div class="admin-row__right">
+                        <span class="admin-kbd">Новая</span>
+                    </div>
+                </div>
+
+                @if (_categories.Count == 0)
+                {
+                    <div class="admin-empty admin-dotgrid" style="margin-top:12px;">
+                        <div style="font-weight:650; letter-spacing:-0.01em;">Пока нет категорий</div>
+                        <div class="admin-help" style="margin-top:6px;">Нажмите «Создать категорию» выше — откроется форма. После создания можно добавлять альбомы в портфолио.</div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var c in _categories.OrderBy(x => x.Order).ThenBy(x => x.CreatedAt))
+                    {
+                        <div class="admin-row">
+                            <div class="admin-cat-left">
+                                <div class="admin-cat-thumb" title="Обложка">
+                                    @if (!string.IsNullOrWhiteSpace(c.CoverPath))
+                                    {
+                                        <img src="@Api.GetCategoryCoverUrl(c.Id)" alt="@c.Title" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Outlined.Image" />
+                                    }
+                                </div>
+                                <div style="min-width:0;">
+                                    <div class="admin-row__title">@c.Title</div>
+                                    <div class="admin-row__meta">Порядок: @c.Order</div>
+                                </div>
+                            </div>
+                            <div class="admin-row__right">
+                                <button type="button"
+                                        class="admin-btn admin-btn--ghost"
+                                        disabled="@CategoriesBusy"
+                                        @onclick="@(() => BeginCategoryCoverPick(c.Id))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Image" />
+                                    @(_uploadingCoverCategoryId == c.Id ? "Загрузка…" : "Обложка")
+                                </button>
+                                <button type="button" class="admin-btn admin-btn--ghost" disabled="@CategoriesBusy" @onclick="() => OpenEdit(c)">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Edit" />
+                                    Редактировать
+                                </button>
+                                <button type="button" class="admin-btn admin-btn--danger" disabled="@CategoriesBusy" @onclick="() => Delete(c.Id)">
+                                    @if (_deletingCategoryId == c.Id)
+                                    {
+                                        <span>Удаление…</span>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Outlined.Delete" />
+                                        <span>Удалить</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    @if (_modalOpen)
+    {
+        <div class="admin-modal-overlay" @onclick="CloseModalFromOverlay">
+            <div class="admin-modal" @onclick:stopPropagation="true">
+                <h3>@(_editingId is null ? "Создать категорию" : "Изменить категорию")</h3>
+
+                <fieldset style="border:none; margin:0; padding:0;" disabled="@_saving">
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div class="admin-field">
+                        <label class="admin-label">Название</label>
+                        <input class="admin-input" placeholder="Название" @bind="_draftTitle" />
+                    </div>
+                    <div class="admin-field">
+                        <label class="admin-label">Порядок</label>
+                        <input class="admin-input" placeholder="Порядок (число)" inputmode="numeric" @bind="_draftOrder" />
+                    </div>
+                </div>
+                </fieldset>
+
+                <div class="modal-buttons">
+                    <button type="button" disabled="@_saving" @onclick="Save">
+                        @(_saving ? "Сохранение…" : "Сохранить")
+                    </button>
+                    <button type="button" disabled="@_saving" @onclick="CloseModal">Отмена</button>
+                </div>
+            </div>
+        </div>
+    }
+</AuthGuard>
+
+@code {
+    private sealed record CategoryVm(int Id, string Title, string? CoverPath, int Order, DateTime CreatedAt);
+
+    private List<CategoryVm> _categories = new();
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _modalOpen;
+    private int? _editingId;
+    private string _draftTitle = "";
+    private string _draftOrder = "0";
+
+    private bool _saving;
+    private int? _uploadingCoverCategoryId;
+    private int? _deletingCategoryId;
+    private ElementReference _categoryCoverInputRef;
+    private int? _pendingCoverCategoryId;
+
+    private Microsoft.JSInterop.DotNetObjectReference<AdminCategories>? _categoryCoverProgressRef;
+    private double _categoryCoverUploadPct;
+    private string _categoryCoverUploadLabel = "";
+
+    private bool CategoriesBusy =>
+        _saving || _uploadingCoverCategoryId.HasValue || _deletingCategoryId.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task<HttpClient> GetClient()
+    {
+        var client = HttpFactory.CreateClient("API");
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private async Task Load()
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            var client = await GetClient();
+            var r = await client.GetAsync("api/Categories");
+            if (r.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (!r.IsSuccessStatusCode)
+            {
+                _error = "Не удалось загрузить категории.";
+                return;
+            }
+
+            var data = await r.Content.ReadFromJsonAsync<List<CategoryVm>>();
+            _categories = data ?? new();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Ошибка загрузки категорий: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public void OnCategoryCoverUploadProgress(long loaded, long total)
+    {
+        if (total > 0)
+            _categoryCoverUploadPct = Math.Clamp((double)loaded / total * 100.0, 0, 100);
+        else
+            _categoryCoverUploadPct = Math.Clamp(Math.Log10(Math.Max(1, loaded)) * 22.0, 10, 92);
+        _categoryCoverUploadLabel = $"Загрузка обложки · {_categoryCoverUploadPct:0}%";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseModalFromOverlay()
+    {
+        if (_saving)
+            return;
+        CloseModal();
+    }
+
+    private void OpenCreate()
+    {
+        if (CategoriesBusy)
+            return;
+        OpenEditInternal(null);
+    }
+
+    private void OpenEdit(CategoryVm c)
+    {
+        if (CategoriesBusy)
+            return;
+        OpenEditInternal(c);
+    }
+
+    private void OpenEditInternal(CategoryVm? c)
+    {
+        if (c is null)
+        {
+            _editingId = null;
+            _draftTitle = "";
+            _draftOrder = "0";
+        }
+        else
+        {
+            _editingId = c.Id;
+            _draftTitle = c.Title;
+            _draftOrder = c.Order.ToString();
+        }
+        _modalOpen = true;
+    }
+
+    private void CloseModal()
+    {
+        _modalOpen = false;
+        _editingId = null;
+        _draftTitle = "";
+        _draftOrder = "0";
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_draftTitle))
+        {
+            _error = "Название обязательно.";
+            return;
+        }
+
+        if (!int.TryParse(_draftOrder, out var order))
+            order = 0;
+
+        _saving = true;
+        try
+        {
+            var client = await GetClient();
+            var payload = new { Title = _draftTitle, Order = order };
+
+            HttpResponseMessage r;
+            if (_editingId is null)
+                r = await client.PostAsJsonAsync("api/Categories", payload);
+            else
+                r = await client.PutAsJsonAsync($"api/Categories/{_editingId.Value}", payload);
+
+            if (r.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (!r.IsSuccessStatusCode)
+            {
+                _error = "Не удалось сохранить категорию.";
+                return;
+            }
+
+            CloseModal();
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Ошибка сохранения категории: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task Delete(int id)
+    {
+        _error = null;
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("confirm", "Удалить категорию? Все альбомы внутри тоже будут удалены.");
+            if (!ok) return;
+
+            _deletingCategoryId = id;
+            var client = await GetClient();
+            var r = await client.DeleteAsync($"api/Categories/{id}");
+
+            if (r.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (!r.IsSuccessStatusCode)
+            {
+                _error = "Не удалось удалить категорию.";
+                return;
+            }
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Ошибка удаления категории: {ex.Message}";
+        }
+        finally
+        {
+            _deletingCategoryId = null;
+        }
+    }
+
+    private async Task BeginCategoryCoverPick(int categoryId)
+    {
+        if (CategoriesBusy)
+            return;
+        _pendingCoverCategoryId = categoryId;
+        await JS.InvokeVoidAsync("photosite.clickById", "adminCategoryCoverInput");
+    }
+
+    private async Task OnCategoryCoverPicked()
+    {
+        if (_pendingCoverCategoryId is not int categoryId)
+            return;
+
+        var fileName = await JS.InvokeAsync<string>("photosite.inputFirstFileName", _categoryCoverInputRef);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            _pendingCoverCategoryId = null;
+            return;
+        }
+
+        _error = null;
+        _uploadingCoverCategoryId = categoryId;
+        _categoryCoverUploadPct = 0;
+        _categoryCoverUploadLabel = "Подготовка…";
+        await InvokeAsync(StateHasChanged);
+
+        _categoryCoverProgressRef = Microsoft.JSInterop.DotNetObjectReference.Create(this);
+        try
+        {
+            var token = await Api.GetJwtFromBrowserAsync(JS) ?? "";
+            var r = await Api.UploadMultipartFromBrowserAsync(
+                JS,
+                "POST",
+                $"/api/Categories/{categoryId}/cover",
+                Array.Empty<(string, string)>(),
+                _categoryCoverInputRef,
+                "file",
+                _categoryCoverProgressRef,
+                nameof(OnCategoryCoverUploadProgress),
+                token);
+
+            if (r.Status == 401)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (!r.Ok)
+                _error = "Не удалось загрузить обложку.";
+            else
+                await Load();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Ошибка загрузки обложки: {ex.Message}";
+        }
+        finally
+        {
+            _categoryCoverProgressRef?.Dispose();
+            _categoryCoverProgressRef = null;
+            _categoryCoverUploadPct = 0;
+            _categoryCoverUploadLabel = "";
+            _uploadingCoverCategoryId = null;
+            _pendingCoverCategoryId = null;
+            try
+            {
+                await Api.ClearBrowserFileInputAsync(JS, _categoryCoverInputRef);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
+    }
+}
+

@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36212.18
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSite.Api", "PhotoSite.Api\PhotoSite.Api.csproj", "{F2CEBB55-F361-40DE-8699-62652EB92E8C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSite.Web", "PhotoSite.Web\PhotoSite.Web.csproj", "{0C5EE871-8A6C-45D2-A558-0554B11C2C9D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Элементы решения", "Элементы решения", "{754FC069-D67B-A9D7-50A1-8D1CA196D8F1}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F2CEBB55-F361-40DE-8699-62652EB92E8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2CEBB55-F361-40DE-8699-62652EB92E8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2CEBB55-F361-40DE-8699-62652EB92E8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2CEBB55-F361-40DE-8699-62652EB92E8C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C5EE871-8A6C-45D2-A558-0554B11C2C9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C5EE871-8A6C-45D2-A558-0554B11C2C9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C5EE871-8A6C-45D2-A558-0554B11C2C9D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C5EE871-8A6C-45D2-A558-0554B11C2C9D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {22DF5D03-AEE4-499E-BD92-41C6D6B0DD92}
+	EndGlobalSection
+EndGlobal

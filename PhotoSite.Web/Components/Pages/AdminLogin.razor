@@ -1,0 +1,39 @@
+﻿@page "/login"
+@layout BlankLayout
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+
+<div class="login-card">
+    <div class="login-brand">
+        <div style="display:flex; gap:12px; align-items:center;">
+            
+            <div>
+                <h1 class="login-title">Вход</h1> 
+            </div>
+        </div>
+        <span class="admin-kbd">PhotoSite</span>
+    </div>
+
+    <EditForm Model="loginModel" OnValidSubmit="HandleLogin" class="login-form">
+        <div class="admin-field">
+            <label class="admin-label">Логин</label>
+            <InputText class="admin-input" @bind-Value="loginModel.Username" placeholder="Логин" />
+        </div>
+        <div class="admin-field">
+            <label class="admin-label">Пароль</label>
+            <InputText class="admin-input" @bind-Value="loginModel.Password" type="password" placeholder="Пароль" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div class="admin-error-box">@error</div>
+        }
+
+        <div class="login-actions">
+            <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
+                <MudIcon Icon="@Icons.Material.Outlined.LockOpen" />
+                Войти
+            </button>
+        </div>
+    </EditForm>
+</div>

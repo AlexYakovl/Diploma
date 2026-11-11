@@ -1,0 +1,93 @@
+@page "/services"
+@using PhotoSite.Web.Components.UI
+
+<PageTitle>Услуги — Мария Яковлева</PageTitle>
+
+<div class="page-header"></div>
+
+<div class="container" style="padding-bottom:80px;">
+
+    <MudGrid Spacing="3" Style="margin-bottom:56px;">
+        @foreach (var svc in _services)
+        {
+            <MudItem xs="12" sm="6" md="6">
+                <div class="service-card">
+                    <MudIcon Icon="@svc.Icon"
+                             Style="font-size:1.8rem; color:#0a0a0a; margin-bottom:14px;" />
+                    <p style="font-weight:600; font-size:1rem; margin:0 0 8px;">@svc.Title</p>
+                    <p style="color:#666; font-size:0.88rem; line-height:1.75; margin:0 0 20px; flex:1;">@svc.Description</p>
+                    <MudDivider Style="margin-bottom:14px;" />
+                    <div style="display:flex; align-items:baseline; justify-content:space-between;">
+                        <span class="service-price">@svc.Price</span>
+                        <span style="font-size:0.75rem; color:#aaa;">@svc.Unit</span>
+                    </div>
+                </div>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <!-- Conditions -->
+    <div style="border:1px solid #e0e0e0; border-radius:6px; padding:34px 28px; margin-bottom:56px; background:#fff;">
+        <div style="text-align:center; margin-bottom:20px;">
+            <h3 class="display-title" style="font-size:1.6rem; margin:10px 0 0;">Условия</h3>
+        </div>
+        <MudGrid Spacing="1">
+            @foreach (var item in _conditions)
+            {
+                <MudItem xs="12" sm="6">
+                    <div style="display:flex; align-items:flex-start; gap:10px; padding:6px 0;">
+                        <MudIcon Icon="@Icons.Material.Outlined.Info"
+                                 Style="font-size:1rem; color:#999; margin-top:2px; flex-shrink:0;" />
+                        <span style="font-size:0.92rem; color:#555; line-height:1.65;">@item</span>
+                    </div>
+                </MudItem>
+            }
+        </MudGrid>
+        <div style="text-align:center; margin-top:20px;">
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/about"
+                       Style="letter-spacing:0.06em;">
+                Подробнее о процессе →
+            </MudButton>
+        </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="services-cta">
+        <h3 class="display-title services-cta__title">Записаться на съёмку</h3>
+        <p class="services-cta__lead">Напишите в Telegram или ВК — обсудим идею, локацию и удобную дату. Можно позвонить.</p>
+        <ContactLinks IsFooter="false" />
+    </div>
+</div>
+
+@code {
+    private record ServiceItem(string Icon, string Title, string Description, string Price, string Unit);
+
+    private readonly List<ServiceItem> _services = new()
+    {
+        new(Icons.Material.Outlined.Person,
+            "Индивидуальная портретная съёмка",
+            "Подходит для портретов, съёмок для контента и индивидуальных историй. Помогу с позированием и подскажу по образам.",
+            "5000 ₽", "1 час"),
+        new(Icons.Material.Outlined.FavoriteBorder,
+            "Семейная съёмка / лавстори (2+ человек)",
+            "Идеально для пары или семьи. До съёмки обсудим идею, локацию и одежду, чтобы результат получился цельным.",
+            "6000 ₽", "1 час"),
+    };
+
+    private readonly List<string> _included = new()
+    {
+        "От 50 кадров за час съёмки",
+        "Лёгкая ретушь крупных портретов",
+        "Ссылка на красивую и удобную галерею для скачивания ваших фото",
+        "Короткий видео-бэкстейдж с телефона или камеры",
+        "Приятное времяпровождение и хорошее настроение",
+    };
+
+    private readonly List<string> _conditions = new()
+    {
+        "Фотосессия бронируется по предоплате (1500 ₽).",
+        "Фотостудия оплачивается отдельно и не входит в стоимость моей работы (могу забронировать я или вы — по желанию).",
+        "Аренда студии, услуги визажиста/стилиста не включены в стоимость.",
+        "Локация может быть уличной, в студии или у вас дома — подберём лучший вариант под формат и концепцию.",
+    };
+}

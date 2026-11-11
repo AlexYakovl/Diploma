@@ -1,0 +1,26 @@
+@* Ссылки: Telegram, ВК, телефон (услуги + футер) *@
+
+@if (IsFooter)
+{
+    <nav class="footer-contacts" aria-label="Связаться">
+        <a class="footer-contact-link" href="https://web.telegram.org/k/#@@mary_yakovlevaaa" target="_blank" rel="noopener noreferrer">Telegram</a>
+        <a class="footer-contact-link" href="https://vk.com/mary.yakovlevaaa" target="_blank" rel="noopener noreferrer">ВКонтакте</a>
+        <a class="footer-contact-link" href="https://www.instagram.com/mary.yakovlevaaa/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a class="footer-contact-link" href="https://max.ru/u/f9LHodD0cOLG0q-o_9nqmaD-IaHmC4HxQpIycugmgHjfCcHmfcF8RN3ADEo" target="_blank" rel="noopener noreferrer">MAX</a>
+        <a class="footer-contact-link footer-contact-link--phone" href="tel:+79822052904">+7 982 205-29-04</a>
+    </nav>
+}
+else
+{
+    <div class="contact-cta" role="group" aria-label="Связаться">
+        <a class="contact-cta__link contact-cta__link--outlined" href="https://web.telegram.org/k/#@@mary_yakovlevaaa" target="_blank" rel="noopener noreferrer">Telegram</a>
+        <a class="contact-cta__link contact-cta__link--outlined" href="https://vk.com/mary.yakovlevaaa" target="_blank" rel="noopener noreferrer">ВКонтакте</a>
+        <a class="contact-cta__link contact-cta__link--outlined" href="https://www.instagram.com/mary.yakovlevaaa/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a class="contact-cta__link contact-cta__link--outlined" href="https://max.ru/u/f9LHodD0cOLG0q-o_9nqmaD-IaHmC4HxQpIycugmgHjfCcHmfcF8RN3ADEo" target="_blank" rel="noopener noreferrer">MAX</a>
+        <a class="contact-cta__link contact-cta__link--fill" href="tel:+79822052904">+7 982 205-29-04</a>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsFooter { get; set; }
+}

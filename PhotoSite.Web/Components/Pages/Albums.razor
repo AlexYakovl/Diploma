@@ -1,0 +1,372 @@
+﻿@page "/admin/albums"
+@layout AdminLayout
+@using System.Text.Json
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Navigation
+@inject ApiService Api
+
+<AuthGuard>
+    <header class="admin-page-header">
+        <div>
+            <h1 class="admin-page-header__title">Альбомы</h1>
+            <p class="admin-page-header__subtitle">Создавайте альбомы, назначайте категорию, меняйте обложку и управляйте фотографиями.</p>
+        </div>
+        <div></div>
+    </header>
+
+    <div class="admin-card admin-card--padded-lg">
+        <div class="admin-kbd" style="margin-bottom:12px;">Альбомы</div>
+
+        <div class="albums-grid">
+
+            <!-- CREATE ALBUM CARD -->
+            <div class="admin-album-tile admin-album-tile--create admin-dotgrid @( _creatingAlbum ? "admin-album-tile--disabled" : null )"
+                 @onclick="@(() => { if (!_creatingAlbum) OpenCreateModal(); })"
+                 role="button"
+                 tabindex="0">
+                <div class="admin-album-tile__plus" aria-hidden="true">+</div>
+                <div class="admin-album-tile__title">Создать альбом</div>
+                <div class="admin-help" style="margin-top:4px;">Категория, описание, обложка</div>
+            </div>
+
+            <!-- EXISTING ALBUMS -->
+            @foreach (var album in albums)
+            {
+                <div class="admin-album-tile" @onclick="@(() => { if (!_creatingAlbum) OpenAlbum(album.Id); })" role="button" tabindex="0">
+                    <div class="admin-album-tile__media">
+                        <img src="@album.CoverUrl" alt="@album.Title" loading="lazy" />
+                    </div>
+                    <div class="admin-album-tile__title" title="@album.Title">@album.Title</div>
+                </div>
+            }
+
+        </div>
+    </div>
+
+    @if (showCreateModal)
+    {
+        <div class="admin-modal-overlay" @onclick="@CloseModalOverlay">
+            <div class="admin-modal" @onclick:stopPropagation="true">
+
+                <h3>Создать альбом</h3>
+
+                <fieldset style="border:none; margin:0; padding:0;" disabled="@_creatingAlbum">
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div class="admin-field">
+                        <label class="admin-label">Категория</label>
+                        <select class="admin-select" @bind="newAlbum.CategoryId">
+                            @foreach (var c in categories.OrderBy(x => x.Order).ThenBy(x => x.CreatedAt))
+                            {
+                                <option value="@c.Id">@c.Title</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="admin-field">
+                        <label class="admin-label">Название</label>
+                        <input class="admin-input" placeholder="Название" @bind="newAlbum.Title" />
+                    </div>
+
+                    <div class="admin-field">
+                        <label class="admin-label">Описание</label>
+                        <textarea class="admin-textarea" placeholder="Описание" @bind="newAlbum.Description"></textarea>
+                    </div>
+
+                    <div class="admin-field">
+                        <label class="admin-label">Обложка</label>
+                        <input type="file"
+                               id="createAlbumCover"
+                               @ref="_createCoverInputRef"
+                               accept=".jpg,.jpeg,.png,.webp"
+                               style="display:none"
+                               disabled="@_creatingAlbum" />
+                        <label class="admin-btn admin-btn--ghost" style="margin-top:6px; cursor:pointer; display:inline-flex;" for="createAlbumCover">
+                            Выбрать файл
+                        </label>
+                        <div class="admin-help">JPG/PNG/WebP. Если не загрузить — будет дефолтная обложка.</div>
+                    </div>
+                </div>
+                </fieldset>
+
+                <div class="modal-buttons">
+                    <button type="button" disabled="@_creatingAlbum" @onclick="CreateAlbum">
+                        @(_creatingAlbum ? "Создание…" : "Создать")
+                    </button>
+                    <button type="button" disabled="@_creatingAlbum" @onclick="CloseModal">Отмена</button>
+                </div>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="admin-error-box" style="margin-top:12px;">@error</div>
+                }
+
+                @if (_creatingAlbum && (!string.IsNullOrWhiteSpace(_createCoverUploadLabel) || _createCoverUploadPct > 0))
+                {
+                    <div class="photosite-upload-progress" style="margin-top:14px;">
+                        <div class="photosite-upload-progress__label">@_createCoverUploadLabel</div>
+                        <div class="photosite-upload-progress__track">
+                            <div class="photosite-upload-progress__fill" style="width:@($"{_createCoverUploadPct:0}%")"></div>
+                        </div>
+                        <div class="photosite-upload-progress__pct">@_createCoverUploadPct.ToString("0")%</div>
+                    </div>
+                }
+
+            </div>
+        </div>
+    }
+</AuthGuard>
+
+@code {
+
+    bool showCreateModal = false;
+    bool _creatingAlbum;
+    string? error;
+    ElementReference _createCoverInputRef;
+    Microsoft.JSInterop.DotNetObjectReference<Albums>? _createAlbumProgressRef;
+    double _createCoverUploadPct;
+    string _createCoverUploadLabel = "";
+
+    List<AlbumDto> albums = new();
+    List<CategoryDto> categories = new();
+    AlbumCreateDto newAlbum = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+        await LoadAlbums();
+    }
+
+    async Task LoadCategories()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient("API");
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+            if (!string.IsNullOrEmpty(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await client.GetAsync("api/categories");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<CategoryDto>>();
+                categories = data ?? new();
+
+                if (categories.Count > 0 && newAlbum.CategoryId == 0)
+                    newAlbum.CategoryId = categories[0].Id;
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    async Task LoadAlbums()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient("API");
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+            if (!string.IsNullOrEmpty(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await client.GetAsync("api/albums");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<AlbumDto>>();
+                if (data != null)
+                {
+                    albums = data.Select(a =>
+                    {
+                        a.CoverUrl = GetCoverUrl(a.Id, a.CoverPath);
+                        return a;
+                    }).ToList();
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                error = "Не удалось загрузить альбомы.";
+            }
+        }
+        catch
+        {
+            error = "Ошибка загрузки альбомов.";
+        }
+    }
+
+    string GetCoverUrl(int id, string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return "/images/default-cover.jpg";
+
+        return Api.GetCoverUrl(id);
+    }
+
+    void OpenCreateModal() => showCreateModal = true;
+
+    void CloseModalOverlay()
+    {
+        if (!_creatingAlbum)
+            CloseModal();
+    }
+
+    async Task CloseModalAsync()
+    {
+        showCreateModal = false;
+        newAlbum = new AlbumCreateDto();
+        error = null;
+        try
+        {
+            await Api.ClearBrowserFileInputAsync(JS, _createCoverInputRef);
+        }
+        catch
+        {
+            /* ignore */
+        }
+    }
+
+    void CloseModal()
+    {
+        _ = CloseModalAsync();
+    }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public void OnCreateAlbumCoverUploadProgress(long loaded, long total)
+    {
+        if (total > 0)
+            _createCoverUploadPct = Math.Clamp((double)loaded / total * 100.0, 0, 100);
+        else
+            _createCoverUploadPct = Math.Clamp(Math.Log10(Math.Max(1, loaded)) * 22.0, 10, 92);
+        _createCoverUploadLabel = $"Загрузка обложки · {_createCoverUploadPct:0}%";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    async Task CreateAlbum()
+    {
+        if (_creatingAlbum)
+            return;
+
+        if (categories.Count == 0)
+        {
+            error = "Сначала создайте категорию.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newAlbum.Title))
+        {
+            error = "Название обязательно.";
+            return;
+        }
+
+        error = null;
+        _creatingAlbum = true;
+        _createCoverUploadPct = 0;
+        _createCoverUploadLabel = "Подготовка…";
+        await InvokeAsync(StateHasChanged);
+
+        _createAlbumProgressRef = Microsoft.JSInterop.DotNetObjectReference.Create(this);
+        try
+        {
+            var fields = new List<(string Name, string Value)>
+            {
+                ("CategoryId", newAlbum.CategoryId.ToString()),
+                ("Title", newAlbum.Title),
+                ("Description", newAlbum.Description ?? ""),
+            };
+            var token = await Api.GetJwtFromBrowserAsync(JS) ?? "";
+            var r = await Api.UploadMultipartFromBrowserAsync(
+                JS,
+                "POST",
+                "/api/albums",
+                fields,
+                _createCoverInputRef,
+                "CoverFile",
+                _createAlbumProgressRef,
+                nameof(OnCreateAlbumCoverUploadProgress),
+                token);
+
+            if (r.Status == 401)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (r.Ok)
+            {
+                var album = JsonSerializer.Deserialize<AlbumDto>(r.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (album != null)
+                {
+                    album.CoverUrl = GetCoverUrl(album.Id, album.CoverPath);
+                    albums.Insert(0, album);
+                    await CloseModalAsync();
+                }
+                else
+                    error = "Не удалось разобрать ответ сервера.";
+            }
+            else
+            {
+                error = "Не удалось создать альбом.";
+            }
+
+            try
+            {
+                await Api.ClearBrowserFileInputAsync(JS, _createCoverInputRef);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
+        catch
+        {
+            error = "Ошибка создания альбома.";
+        }
+        finally
+        {
+            _createAlbumProgressRef?.Dispose();
+            _createAlbumProgressRef = null;
+            _createCoverUploadPct = 0;
+            _createCoverUploadLabel = "";
+            _creatingAlbum = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    void OpenAlbum(int id)
+    {
+        Navigation.NavigateTo($"/admin/albums/{id}");
+    }
+
+    class AlbumDto
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+        public string? CoverPath { get; set; }
+        public string? CoverUrl { get; set; }
+    }
+
+    class AlbumCreateDto
+    {
+        public int CategoryId { get; set; }
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    class CategoryDto
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public int Order { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}

@@ -1,0 +1,86 @@
+@page "/"
+@using PhotoSite.Web.Components.UI
+
+<PageTitle>Яковлева Мария — фотограф</PageTitle>
+
+<!-- ── Hero (fullscreen, вытянут за navbar через margin-top в CSS) ── -->
+<CarouselHero />
+
+<!-- ── About ────────────────────────────────────────────────────── -->
+<section class="section">
+    <div class="container" style="padding-bottom: 52px;">
+        <MudGrid Spacing="6" Class="photosite-grid-singlecol-md">
+            <MudItem xs="12" md="5">
+                <div class="about-photo-placeholder">
+                    <img src="/Storage/others/aboutme.jpg?v=@_aboutPhotoCacheBust" alt="Мария Яковлева"
+                         class="about-photo"
+                         onerror="this.parentElement.innerHTML='<span style=\'color:#ccc;font-size:0.8rem;\'>Фото</span>'" />
+                </div>
+
+                @if (_isAdmin)
+                {
+                    <div style="margin-top:14px;">
+                        <input type="file"
+                               id="aboutMePhotoUpload"
+                               @ref="_aboutMePhotoInputRef"
+                               accept=".jpg,.jpeg,.png,.webp"
+                               style="display:none"
+                               disabled="@_aboutPhotoUploading"
+                               @onchange="AboutMePhotoNativeChanged" />
+                        <div style="position:relative; display:inline-block;">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                       Disabled="_aboutPhotoUploading"
+                                       StartIcon="@Icons.Material.Outlined.CameraAlt"
+                                       Style="border-style:dashed; font-size:0.85rem;"
+                                       OnClick="PickAboutMePhotoAsync">
+                                @(_aboutPhotoExists ? "Заменить фото" : "Загрузить фото")
+                            </MudButton>
+                        </div>
+                        @if (_aboutPhotoUploading)
+                        {
+                            <div class="photosite-upload-progress" style="margin-top:12px; max-width:320px;">
+                                <div class="photosite-upload-progress__label">@_aboutMePhotoUploadLabel</div>
+                                <div class="photosite-upload-progress__track">
+                                    <div class="photosite-upload-progress__fill" style="width:@($"{_aboutMePhotoUploadPct:0}%")"></div>
+                                </div>
+                                <div class="photosite-upload-progress__pct">@_aboutMePhotoUploadPct.ToString("0")%</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudItem>
+            <MudItem xs="12" md="7" Class="d-flex flex-column justify-center">
+                <span class="section-label">Обо мне</span>
+                <h2 class="display-title" style="font-size:clamp(1.5rem,3 vw,2.4rem); margin:12px 0 20px;">
+                    Привет! Я Маша — фотограф,<br>который влюблён в своё дело
+                </h2>
+                <p style="color:#555; line-height:1.8; margin:0 0 14px; font-size:0.95rem;">
+                    Я верю, что фотография — это не просто кадр, а сохранённая частичка жизни: улыбка ребёнка, взгляд влюблённых, мгновение радости или задумчивости.
+                    Моя задача — уловить и передать эти эмоции так, чтобы через годы вы смогли вновь пережить тот самый момент.
+                </p>
+                <p style="color:#555; line-height:1.8; margin:0 0 28px; font-size:0.95rem;">
+                    Работаю с теми, кто хочет оставить память о себе в моменте, с семьями, влюблёнными парами.
+                    Каждая съёмка для меня — это маленькая история, которую мы создаём вместе.
+                </p>
+            </MudItem>
+
+            <MudItem xs="12">
+                <div class="home-about-links">
+                    <MudButton Href="/about" Variant="Variant.Outlined" Color="Color.Inherit" Class="home-about-link">
+                        Обо мне
+                    </MudButton>
+                    <MudButton Href="/portfolio" Variant="Variant.Outlined" Color="Color.Inherit" Class="home-about-link">
+                        Портфолио
+                    </MudButton>
+                    <MudButton Href="/services" Variant="Variant.Outlined" Color="Color.Inherit" Class="home-about-link">
+                        Цены и услуги
+                    </MudButton>
+                    <MudButton Href="/reviews" Variant="Variant.Outlined" Color="Color.Inherit" Class="home-about-link">
+                        Отзывы
+                    </MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </div>
+</section>
+

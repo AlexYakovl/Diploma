@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="icon" href="favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="favicon.png" />
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="PhotoSite.Web.styles.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.21.7/dist/css/uikit.min.css" crossorigin="anonymous" />
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.21.7/dist/js/uikit.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.21.7/dist/js/uikit-icons.min.js" crossorigin="anonymous"></script>
+    <script>
+        window.photosite = window.photosite || {};
+        window.photosite.setBodyScrollLock = (locked) => {
+            document.body.style.overflow = locked ? 'hidden' : '';
+        };
+        window.photosite.clickById = (id) => {
+            const el = document.getElementById(id);
+            if (el) el.click();
+        };
+        window.photosite.isTouchLike = () => {
+            // devices without hover (phones/tablets) should use "tap to reveal" UX
+            try { return window.matchMedia && window.matchMedia('(hover: none)').matches; }
+            catch { return false; }
+        };
+        window.photosite.uikitUpdate = () => {
+            requestAnimationFrame(() => {
+                if (window.UIkit && typeof window.UIkit.update === "function")
+                    window.UIkit.update();
+            });
+        };
+
+        window.photosite.homeHeader = (() => {
+            let handler = null;
+
+            function computeShow() {
+                const hero = document.querySelector('.hero-carousel');
+                if (!hero) return true;
+                const heroHeight = hero.offsetHeight || 0;
+                // Show header only when we are near the end of the hero.
+                // For a fullscreen hero (≈1 viewport height), this keeps header hidden on the first screen.
+                return window.scrollY >= Math.max(0, heroHeight - 80);
+            }
+
+            function setState(show) {
+                if (show) document.body.classList.remove('home-hero-only');
+                else document.body.classList.add('home-hero-only');
+            }
+
+            function init(dotnetRef) {
+                // start hidden at top of hero
+                setState(computeShow());
+
+                handler = () => {
+                    const show = computeShow();
+                    setState(show);
+                    if (dotnetRef) dotnetRef.invokeMethodAsync('OnHomeHeaderVisibility', show);
+                };
+
+                window.addEventListener('scroll', handler, { passive: true });
+                window.addEventListener('resize', handler);
+                handler();
+            }
+
+            function dispose() {
+                if (handler) {
+                    window.removeEventListener('scroll', handler);
+                    window.removeEventListener('resize', handler);
+                    handler = null;
+                }
+                document.body.classList.remove('home-hero-only');
+            }
+
+            return { init, dispose };
+        })();
+    </script>
+    <script src="js/image-load-gate.js"></script>
+    <script src="js/browser-upload.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

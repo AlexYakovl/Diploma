@@ -1,0 +1,45 @@
+﻿@using Microsoft.AspNetCore.Components
+@inject NavigationManager Navigation
+@inject IHttpClientFactory HttpFactory
+
+@if (ChildContent != null)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        try
+        {
+            var client = HttpFactory.CreateClient("API");
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // Проверка валидности токена через защищённый эндпоинт
+            var response = await client.GetAsync("api/Auth/me");
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+                Navigation.NavigateTo("/login", true);
+            }
+        }
+        catch
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+            Navigation.NavigateTo("/login", true);
+        }
+    }
+}

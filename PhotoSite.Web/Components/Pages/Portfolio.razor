@@ -1,0 +1,41 @@
+@page "/portfolio"
+@using PhotoSite.Web.Components.UI
+@inject ApiService Api
+@inject NavigationManager Nav
+
+<PageTitle>Портфолио — Мария Яковлева</PageTitle>
+
+<div class="page-header">
+    <span class="section-label"></span>
+</div>
+
+<div class="container" style="padding-bottom:80px;">
+    @if (_loading)
+    {
+        <div style="text-align:center; padding:80px 0;">
+            <MudProgressCircular Indeterminate="true" Color="Color.Dark" Size="Size.Large" />
+        </div>
+    }
+    else if (_categories.Count == 0)
+    {
+        <div style="text-align:center; padding:80px 0;">
+            <MudIcon Icon="@Icons.Material.Outlined.PhotoLibrary"
+                     Style="font-size:3.5rem; color:#ccc; display:block; margin:0 auto 12px;" />
+            <p style="color:#aaa; margin:0;">Пока нет категорий.</p>
+        </div>
+    }
+    else
+    {
+        <MudGrid Spacing="3">
+            @foreach (var category in _categories)
+            {
+                <MudItem xs="12" sm="6" md="6">
+                    <CategoryCard CategoryId="category.Id"
+                                  Title="@category.Title"
+                                  HasCover="@(!string.IsNullOrEmpty(category.CoverPath))"
+                                  OnClick="@(() => GoToCategory(category.Id))" />
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</div>

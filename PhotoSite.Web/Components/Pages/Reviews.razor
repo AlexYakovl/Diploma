@@ -1,0 +1,306 @@
+﻿@page "/admin/reviews"
+@layout AdminLayout
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Navigation
+@inject ApiService Api
+
+<AuthGuard>
+    <header class="admin-page-header">
+        <div>
+            <h1 class="admin-page-header__title">Отзывы</h1>
+            <p class="admin-page-header__subtitle">Модерация отзывов: публикуйте или скрывайте, удаляйте спам.</p>
+        </div>
+        <div class="admin-actions @(ReviewsBusy ? "admin-row--disabled" : null)">
+            <button type="button" class="admin-btn admin-btn--ghost admin-btn--pill" disabled="@ReviewsBusy" @onclick="LoadAll">
+                <MudIcon Icon="@Icons.Material.Outlined.Refresh" />
+                Все
+            </button>
+            <button type="button" class="admin-btn admin-btn--ghost admin-btn--pill" disabled="@ReviewsBusy" @onclick="LoadPending">
+                <MudIcon Icon="@Icons.Material.Outlined.FilterAlt" />
+                На модерации
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="admin-error-box" style="margin-bottom:12px;">@error</div>
+    }
+
+    <div class="admin-card admin-card--padded-lg">
+        @if (!isLoaded)
+        {
+            <div class="admin-help">Загрузка...</div>
+        }
+        else if (reviews.Count == 0)
+        {
+            <div class="admin-empty admin-dotgrid">
+                <div style="font-weight:650; letter-spacing:-0.01em;">Нет отзывов</div>
+                <div class="admin-help" style="margin-top:6px;">Когда появятся новые, они будут видны здесь для модерации.</div>
+            </div>
+        }
+        else
+        {
+            <div class="admin-reviews-list @(ReviewsBusy ? "admin-list--busy" : null)">
+                @foreach (var r in reviews)
+                {
+                    <div class="admin-review-row">
+                        <div class="admin-review-row__left">
+                            <img class="admin-review-avatar" src="@GetAvatarUrl(r)" alt="avatar"
+                                 onerror="this.onerror=null;this.src='@DefaultAvatarDataUri';" />
+
+                            <div style="min-width:0;">
+                                <div class="admin-review-head">
+                                    <div class="admin-review-author">@r.Author</div>
+                                    @if (!string.IsNullOrEmpty(r.SocialLink))
+                                    {
+                                        <a class="admin-review-link" href="@r.SocialLink" target="_blank" rel="noopener noreferrer" title="@r.SocialLink">
+                                            @r.SocialLink
+                                        </a>
+                                    }
+                                </div>
+
+                                <div class="admin-review-text">@r.Text</div>
+
+                                <div class="admin-review-meta">
+                                    <span>@r.CreatedAt.ToLocalTime().ToString("g")</span>
+                                    <span class="admin-badge @(!r.IsHidden ? "admin-badge--published" : "admin-badge--pending")">
+                                        @(!r.IsHidden ? "Опубликован" : "Скрыт (на модерации)")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-review-row__actions">
+                            @if (r.IsHidden)
+                            {
+                                <button type="button" class="admin-btn admin-btn--primary" disabled="@ReviewsBusy" @onclick="() => SetVisibility(r.Id, hidden: false)">
+                                    @if (_busyReviewId == r.Id && _busyReviewAction == ReviewRowAction.Visibility)
+                                    {
+                                        <span>Публикация…</span>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" />
+                                        <span>Опубликовать</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="admin-btn admin-btn--ghost" disabled="@ReviewsBusy" @onclick="() => SetVisibility(r.Id, hidden: true)">
+                                    @if (_busyReviewId == r.Id && _busyReviewAction == ReviewRowAction.Visibility)
+                                    {
+                                        <span>Скрытие…</span>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Outlined.VisibilityOff" />
+                                        <span>Скрыть</span>
+                                    }
+                                </button>
+                            }
+                            <button type="button" class="admin-btn admin-btn--danger" disabled="@ReviewsBusy" @onclick="() => DeleteReview(r.Id)">
+                                @if (_busyReviewId == r.Id && _busyReviewAction == ReviewRowAction.Delete)
+                                {
+                                    <span>Удаление…</span>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" />
+                                    <span>Удалить</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</AuthGuard>
+
+@code {
+    enum ReviewRowAction { Visibility, Delete }
+
+    bool isLoaded = false;
+    string? error;
+    List<ReviewDto> reviews = new();
+
+    int? _busyReviewId;
+    ReviewRowAction _busyReviewAction;
+
+    bool ReviewsBusy => !isLoaded || _busyReviewId.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAll();
+    }
+
+    async Task<HttpClient> GetClientOrRedirect()
+    {
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/login", true);
+            throw new InvalidOperationException("Отсутствует JWT токен");
+        }
+
+        var client = HttpFactory.CreateClient("API");
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        return client;
+    }
+
+    async Task LoadAll()
+    {
+        await LoadInternal("api/reviews/admin");
+    }
+
+    async Task LoadPending()
+    {
+        await LoadInternal("api/reviews/pending");
+    }
+
+    async Task LoadInternal(string url)
+    {
+        error = null;
+        isLoaded = false;
+
+        try
+        {
+            var client = await GetClientOrRedirect();
+            var response = await client.GetAsync(url);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                error = $"Не удалось загрузить отзывы: {(int)response.StatusCode}";
+                return;
+            }
+
+            var data = await response.Content.ReadFromJsonAsync<List<ReviewDto>>();
+            reviews = data ?? new List<ReviewDto>();
+        }
+        catch
+        {
+            error = "Ошибка загрузки отзывов.";
+        }
+        finally
+        {
+            isLoaded = true;
+        }
+    }
+
+    async Task SetVisibility(int id, bool hidden)
+    {
+        error = null;
+        _busyReviewId = id;
+        _busyReviewAction = ReviewRowAction.Visibility;
+        try
+        {
+            var client = await GetClientOrRedirect();
+            var response = await client.PutAsync($"api/reviews/{id}/visibility?hidden={hidden.ToString().ToLowerInvariant()}", content: null);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                error = $"Не удалось обновить отзыв: {(int)response.StatusCode}";
+                return;
+            }
+
+            var r = reviews.FirstOrDefault(x => x.Id == id);
+            if (r != null) r.IsHidden = hidden;
+        }
+        catch
+        {
+            error = "Ошибка обновления отзыва.";
+        }
+        finally
+        {
+            _busyReviewId = null;
+        }
+    }
+
+    async Task DeleteReview(int id)
+    {
+        error = null;
+        _busyReviewId = id;
+        _busyReviewAction = ReviewRowAction.Delete;
+        try
+        {
+            var client = await GetClientOrRedirect();
+            var response = await client.DeleteAsync($"api/reviews/{id}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                error = $"Не удалось удалить отзыв: {(int)response.StatusCode}";
+                return;
+            }
+
+            reviews.RemoveAll(r => r.Id == id);
+        }
+        catch
+        {
+            error = "Ошибка удаления отзыва.";
+        }
+        finally
+        {
+            _busyReviewId = null;
+        }
+    }
+
+    const string DefaultAvatarDataUri =
+        "data:image/svg+xml;utf8," +
+        "<svg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'>" +
+        "<rect width='56' height='56' rx='28' fill='%23f1f3f5'/>" +
+        "<circle cx='28' cy='22' r='10' fill='%23cbd3da'/>" +
+        "<path d='M12 50c3.5-10 12-16 16-16s12.5 6 16 16' fill='%23cbd3da'/>" +
+        "</svg>";
+
+    string GetAvatarUrl(ReviewDto r)
+    {
+        if (string.IsNullOrWhiteSpace(r.AvatarPath))
+            return DefaultAvatarDataUri;
+
+        return Api.GetReviewAvatarUrl(r.Id);
+    }
+
+    string GetStatusBadgeStyle(bool isHidden)
+    {
+        var common = "display:inline-block;padding:2px 8px;border-radius:999px;font-weight:600;font-size:0.85em;";
+        if (isHidden)
+            return common + "background:#fff3cd;color:#664d03;border:1px solid #ffecb5;";
+        return common + "background:#d1e7dd;color:#0f5132;border:1px solid #badbcc;";
+    }
+
+    class ReviewDto
+    {
+        public int Id { get; set; }
+        public string Author { get; set; } = "";
+        public string? SocialLink { get; set; }
+        public string Text { get; set; } = "";
+        public string? AvatarPath { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsHidden { get; set; }
+    }
+}

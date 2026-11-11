@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: photosite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-photosite}
+      POSTGRES_USER: ${POSTGRES_USER:-photosite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    networks:
+      - photosite
+
+  photosite-api:
+    build:
+      context: .
+      dockerfile: PhotoSite.Api/Dockerfile
+    container_name: photosite-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-photosite};Username=${POSTGRES_USER:-photosite};Password=${POSTGRES_PASSWORD:-change_me}
+      Jwt__Issuer: ${JWT_ISSUER:-maria-yakovleva.ru}
+      Jwt__Audience: ${JWT_AUDIENCE:-maria-yakovleva.ru}
+      Jwt__Key: ${JWT_KEY:-change_me_please_set_a_long_random_key}
+    volumes:
+      - api_storage:/app/Storage
+    ports:
+      - "127.0.0.1:5081:8080"
+    networks:
+      - photosite
+
+  photosite-web:
+    build:
+      context: .
+      dockerfile: PhotoSite.Web/Dockerfile
+    container_name: photosite-web
+    restart: unless-stopped
+    depends_on:
+      - photosite-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Api__BaseUrl: http://photosite-api:8080/
+    ports:
+      - "127.0.0.1:5080:8080"
+    networks:
+      - photosite
+
+volumes:
+  postgres_data:
+  api_storage:
+
+networks:
+  photosite:
+    driver: bridge

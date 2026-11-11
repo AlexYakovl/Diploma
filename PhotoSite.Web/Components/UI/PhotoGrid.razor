@@ -1,0 +1,122 @@
+@* Lightbox: листание по кругу, клавиатура, свайп мышью/пальцем *@
+@if (LightboxUrl != null)
+{
+    <div class="lightbox-overlay"
+         @ref="_lightboxRef"
+         tabindex="0"
+         @onclick="CloseLightbox"
+         @onkeydown="OnLightboxKey"
+         @onpointerdown="OnLightboxPointerDown"
+         @onpointerup="OnLightboxPointerUp"
+         @onpointercancel="() => _pointerStartX = null"
+         @onpointerleave="() => _pointerStartX = null">
+        <span class="lightbox-close" @onclick:stopPropagation="true" @onclick="CloseLightbox" title="Закрыть (Esc)">
+            <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:2rem;" />
+        </span>
+        @if (Photos.Count > 1)
+        {
+            <button type="button" class="lightbox-nav lightbox-nav--prev" title="Предыдущее"
+                    @onclick:stopPropagation="true" @onclick="LightboxPrev">
+                <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
+            </button>
+            <button type="button" class="lightbox-nav lightbox-nav--next" title="Следующее"
+                    @onclick:stopPropagation="true" @onclick="LightboxNext">
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" />
+            </button>
+        }
+        <div class="lightbox-center" @onclick:stopPropagation="true">
+            <img @key="_lightboxIndex" src="@LightboxUrl" class="lightbox-img" alt="@LightboxFileName" loading="eager" draggable="false" />
+            @if (Photos.Count > 1)
+            {
+                <p class="lightbox-caption">@LightboxNumber / @Photos.Count</p>
+            }
+        </div>
+    </div>
+}
+
+<div>
+    @if (_isAdmin && _photoUploadBusy)
+    {
+        <div style="margin-bottom:14px;">
+            <MudPaper Elevation="0" Style="padding:12px; border:1px solid rgba(0,0,0,0.08); border-radius:10px;">
+                <MudText Typo="Typo.subtitle2" Style="margin-bottom:8px;">Загрузка фото</MudText>
+                <MudProgressLinear Color="Color.Dark" Value="_uploadPct" />
+                <MudText Typo="Typo.caption" Style="margin-top:8px; display:block; color:#666;">@_uploadStatusLabel</MudText>
+            </MudPaper>
+        </div>
+    }
+    @if (_isAdmin && !string.IsNullOrWhiteSpace(_uploadError))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Style="margin-bottom:14px;">
+            @_uploadError
+        </MudAlert>
+    }
+
+    @if (Photos.Count == 0 && !_isAdmin)
+    {
+        <div class="text-center" style="padding:60px 0; color:#aaa;">
+            <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera"
+                     Style="font-size:4rem; opacity:0.3; display:block; margin:0 auto 16px;" />
+            <MudText Typo="Typo.body1" Style="color:#bbb;">No photos in this album yet.</MudText>
+        </div>
+    }
+    else
+    {
+        <div class="photo-mosaic">
+            @{
+                var globalIndex = 0;
+            }
+            @foreach (var row in _rows)
+            {
+                <div class="@RowClass(row)">
+                    @foreach (var photo in row)
+                    {
+                        var idx = globalIndex;
+                        globalIndex++;
+                        <div class="photo-mosaic__cell" style="@AspectStyle(photo)" @onclick="() => OpenLightbox(idx)">
+                            <div class="photo-mosaic__inner">
+                                <img src="@Api.GetPhotoUrl(photo.Id)" alt="@photo.OriginalFileName" loading="lazy" class="photo-mosaic__img" />
+                            </div>
+                            @if (_isAdmin)
+                            {
+                                <div class="photo-delete-btn" @onclick:stopPropagation="true">
+                                <MudTooltip Text="Удалить фото">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Color="Color.Error" Size="Size.Small"
+                                                       Style="background:rgba(255,255,255,0.9);"
+                                                       Disabled="@_photoUploadBusy"
+                                                       OnClick="@(async () => await OnDeleteAsync(photo.Id))" />
+                                    </MudTooltip>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_isAdmin)
+        {
+            <div class="photo-mosaic__admin-add">
+                <div class="photo-mosaic__admin-add-inner @( _photoUploadBusy ? "photo-mosaic__admin-add-inner--busy" : null)"
+                     style="border:2px dashed #ccc; border-radius:4px; @( _photoUploadBusy ? "opacity:0.65; pointer-events:none;" : "cursor:pointer;")">
+                    <input type="file"
+                           id="@_albumPhotoInputId"
+                           @ref="_photoInputRef"
+                           accept=".jpg,.jpeg,.png,.webp"
+                           style="display:none"
+                           disabled="@_photoUploadBusy"
+                           @onchange="OnPhotoNativeChanged" />
+                    <label for="@_albumPhotoInputId" style="cursor:inherit; display:block; width:100%; min-height:120px; padding:24px; box-sizing:border-box;">
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#aaa;">
+                            <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:2.5rem;" />
+                            <MudText Typo="Typo.body2" Style="font-size:0.8rem; text-align:center;">
+                                @(_photoUploadBusy ? "Загрузка…" : "Одно фото за раз (JPG/PNG/WebP)")
+                            </MudText>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        }
+    }
+</div>

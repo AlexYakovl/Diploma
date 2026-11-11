@@ -1,0 +1,67 @@
+﻿@page "/admin"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+@inject PhotoSite.Web.Components.Services.AuthStateService AuthState
+@layout AdminLayout
+
+<AuthGuard>
+    <header class="admin-page-header">
+        <div>
+            <h1 class="admin-page-header__title">Панель</h1>
+            <p class="admin-page-header__subtitle">Управление контентом сайта: альбомы, категории и отзывы.</p>
+        </div>
+    </header>
+
+    <div class="admin-card admin-card--padded-lg" style="margin-bottom:14px;">
+        <div class="admin-kbd" style="margin-bottom:10px;">Быстрые действия</div>
+        <div class="admin-quick-grid">
+            <a class="admin-card admin-card--padded admin-quick-card" href="/admin/albums">
+                <div class="admin-quick-card__inner">
+                    <MudIcon Icon="@Icons.Material.Outlined.PhotoAlbum" Style="font-size:1.35rem;" />
+                    <div class="admin-quick-card__text">
+                        <div class="admin-quick-card__title">Альбомы</div>
+                        <div class="admin-help">Создать / редактировать / загрузить фото</div>
+                    </div>
+                </div>
+            </a>
+            <a class="admin-card admin-card--padded admin-quick-card" href="/admin/categories">
+                <div class="admin-quick-card__inner">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Style="font-size:1.35rem;" />
+                    <div class="admin-quick-card__text">
+                        <div class="admin-quick-card__title">Категории</div>
+                        <div class="admin-help">Порядок, названия, обложки</div>
+                    </div>
+                </div>
+            </a>
+            <a class="admin-card admin-card--padded admin-quick-card" href="/admin/reviews">
+                <div class="admin-quick-card__inner">
+                    <MudIcon Icon="@Icons.Material.Outlined.RateReview" Style="font-size:1.35rem;" />
+                    <div class="admin-quick-card__text">
+                        <div class="admin-quick-card__title">Отзывы</div>
+                        <div class="admin-help">Модерация и удаление</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="admin-divider" style="margin:18px 0 14px;"></div>
+        <div class="admin-empty admin-dotgrid">
+            <div style="font-weight:650; letter-spacing:-0.01em;">Совет</div>
+            <div class="admin-help" style="margin-top:6px;">
+                Для лучшего вида сетки в альбомах загружайте фото разных ориентаций — панорамы встанут в одну строку, портреты — по две.
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align:center; margin-top:8px;">
+        <p class="admin-kbd" style="margin:0;">«Замороженное время — под контролем»</p>
+    </div>
+</AuthGuard>
+
+@code {
+    private async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+        AuthState.Invalidate();
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

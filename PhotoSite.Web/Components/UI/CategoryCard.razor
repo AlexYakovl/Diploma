@@ -1,0 +1,33 @@
+@inject ApiService Api
+
+<div class="album-card-wrap category-card-wrap">
+    <div class="album-card-public category-card-public" @onclick="OnClick" style="cursor:pointer;">
+
+        @if (HasCover)
+        {
+            <img src="@Api.GetCategoryCoverUrl(CategoryId)" alt="@Title" loading="lazy" />
+        }
+        else
+        {
+            <div class="album-no-cover"
+                 style="display:flex; align-items:center; justify-content:center; background:#1a1a1a;">
+                <MudIcon Icon="@Icons.Material.Outlined.Folder"
+                         Style="font-size:2.5rem; color:#3a3a3a; position:relative; z-index:1;" />
+            </div>
+        }
+
+        <div class="album-card-overlay category-card-overlay">
+            <div class="category-card-pill">
+                <span class="category-card-title">@Title</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int CategoryId { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool HasCover { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+}
+

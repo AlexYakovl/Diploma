@@ -1,0 +1,59 @@
+<MudAppBar Elevation="0" Fixed="true"
+           Style="background:rgba(255,255,255,0.96); backdrop-filter:blur(10px); border-bottom:1px solid rgba(0,0,0,0.08); color:#0a0a0a;">
+
+    <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit"
+                   Class="d-flex d-md-none" OnClick="ToggleDrawer" />
+
+    <span class="navbar-title navbar-brand-secret ml-1"
+          @onclick="OnBrandTitleClick"
+          @onclick:preventDefault="true">
+        Мария Яковлева
+    </span>
+
+    <MudSpacer />
+
+    <div class="d-none d-md-flex align-center navbar-links" style="margin-right:8px;">
+        <NavLink class="nav-link-item" href="/" Match="NavLinkMatch.All">Главная</NavLink>
+        <NavLink class="nav-link-item" href="/about">Обо мне</NavLink>
+        <NavLink class="nav-link-item" href="/portfolio">Портфолио</NavLink>
+        <NavLink class="nav-link-item" href="/services">Цены и услуги</NavLink>
+        <NavLink class="nav-link-item" href="/reviews">Отзывы</NavLink>
+        @if (_isAdmin)
+        {
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Inherit"
+                       Href="/admin"
+                       Style="font-size:0.72rem; letter-spacing:0.08em; border-color:rgba(0,0,0,0.35); padding:4px 14px;">
+                Админка
+            </MudButton>
+        }
+    </div>
+</MudAppBar>
+
+<MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.Left" Elevation="1"
+           Variant="DrawerVariant.Temporary">
+    <MudDrawerHeader>
+        <span class="navbar-title navbar-brand-secret"
+              @onclick="OnBrandTitleClick"
+              @onclick:preventDefault="true">
+            Мария Яковлева
+        </span>
+    </MudDrawerHeader>
+    <MudNavMenu>
+        <MudNavLink Href="/" Match="NavLinkMatch.All"
+                    Icon="@Icons.Material.Outlined.Home" OnClick="CloseDrawer">Главная</MudNavLink>
+        <MudNavLink Href="/about"
+                    Icon="@Icons.Material.Outlined.PersonOutline" OnClick="CloseDrawer">О себе</MudNavLink>
+        <MudNavLink Href="/portfolio"
+                    Icon="@Icons.Material.Outlined.PhotoLibrary" OnClick="CloseDrawer">Портфолио</MudNavLink>
+        <MudNavLink Href="/services"
+                    Icon="@Icons.Material.Outlined.List" OnClick="CloseDrawer">Услуги</MudNavLink>
+        <MudNavLink Href="/reviews"
+                    Icon="@Icons.Material.Outlined.RateReview" OnClick="CloseDrawer">Отзывы</MudNavLink>
+        @if (_isAdmin)
+        {
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="/admin"
+                        Icon="@Icons.Material.Outlined.AdminPanelSettings" OnClick="CloseDrawer">Админка</MudNavLink>
+        }
+    </MudNavMenu>
+</MudDrawer>

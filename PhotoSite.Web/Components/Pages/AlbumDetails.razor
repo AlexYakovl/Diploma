@@ -1,0 +1,511 @@
+﻿@page "/admin/albums/{Id:int}"
+@layout AdminLayout
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Navigation
+@inject PhotoSite.Web.Components.Services.ApiService Api
+
+<AuthGuard>
+
+    @if (album == null)
+    {
+        <div class="admin-card admin-card--padded-lg">
+            <div class="admin-help">Загрузка...</div>
+        </div>
+    }
+    else
+    {
+        <header class="admin-page-header">
+            <div>
+                <h1 class="admin-page-header__title">@album.Title</h1>
+                <p class="admin-page-header__subtitle">Редактирование альбома и управление фотографиями.</p>
+            </div>
+            <div class="admin-actions">
+                <button type="button" class="admin-btn admin-btn--ghost" disabled="@PageBusy" @onclick="@(() => Navigation.NavigateTo("/admin/albums"))">
+                    <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" />
+                    Назад
+                </button>
+            </div>
+        </header>
+
+        <section class="admin-card admin-card--padded-lg @(PageBusy ? "admin-card--busy" : null)" style="margin-bottom:14px;">
+            <div class="admin-kbd" style="margin-bottom:12px;">Данные альбома</div>
+
+            <div style="display:grid; grid-template-columns:1fr; gap:12px; max-width:820px;">
+                <div class="admin-field">
+                    <label class="admin-label">Название</label>
+                    <input class="admin-input" disabled="@PageBusy" @bind="album.Title" placeholder="Название" />
+                </div>
+                <div class="admin-field">
+                    <label class="admin-label">Описание</label>
+                    <textarea class="admin-textarea" disabled="@PageBusy" @bind="album.Description" placeholder="Описание"></textarea>
+                </div>
+                <div class="admin-field" style="@(PageBusy ? "pointer-events:none; opacity:0.6;" : null)">
+                    <label class="admin-label">Обложка</label>
+                    <input type="file"
+                           id="albumCoverPick"
+                           @ref="_coverInputRef"
+                           accept=".jpg,.jpeg,.png,.webp"
+                           style="display:none"
+                           disabled="@PageBusy"
+                           @onchange="_ => _albumFormError = null" />
+                    <label class="admin-btn admin-btn--ghost" style="margin-top:6px; cursor:pointer;" for="albumCoverPick">
+                        Файл обложки (JPG/PNG/WebP)
+                    </label>
+                </div>
+
+                <div class="admin-actions" style="justify-content:flex-start; margin-top:2px;">
+                    <button type="button" class="admin-btn admin-btn--primary" disabled="@PageBusy" @onclick="UpdateAlbum">
+                        @if (_savingAlbum)
+                        {
+                            <span>Сохранение…</span>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.Save" />
+                            <span>Сохранить</span>
+                        }
+                    </button>
+                    <button type="button" class="admin-btn admin-btn--danger" disabled="@PageBusy" @onclick="DeleteAlbum">
+                        @if (_deletingAlbum)
+                        {
+                            <span>Удаление…</span>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.DeleteForever" />
+                            <span>Удалить альбом</span>
+                        }
+                    </button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_albumFormError))
+                {
+                    <div class="admin-error-box" style="margin-top:12px;">@_albumFormError</div>
+                }
+                @if (_savingAlbum && (!string.IsNullOrWhiteSpace(_albumCoverSaveLabel) || _albumCoverSavePct > 0))
+                {
+                    <div class="photosite-upload-progress" style="margin-top:14px;">
+                        <div class="photosite-upload-progress__label">@_albumCoverSaveLabel</div>
+                        <div class="photosite-upload-progress__track">
+                            <div class="photosite-upload-progress__fill" style="width:@($"{_albumCoverSavePct:0}%")"></div>
+                        </div>
+                        <div class="photosite-upload-progress__pct">@_albumCoverSavePct.ToString("0")%</div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="admin-card admin-card--padded-lg @(PageBusy ? "admin-card--busy" : null)">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div>
+                    <div class="admin-page-header__title" style="font-size:1.35rem;">Фотографии</div>
+                    <div class="admin-help" style="margin-top:6px;">Можно выбрать несколько файлов — загрузка по очереди, по одному снимку за запрос (JPG/PNG/WebP).</div>
+                </div>
+                <div class="admin-actions">
+                    <label class="admin-btn admin-btn--ghost @(PageBusy ? "is-disabled" : null)" style="margin:0;" for="albumToolbarPhotoPick">
+                        <MudIcon Icon="@Icons.Material.Outlined.AddPhotoAlternate" />
+                        @(_uploading ? "Загрузка…" : "Загрузить фото")
+                        <input type="file"
+                               id="albumToolbarPhotoPick"
+                               @ref="_toolbarPhotoInputRef"
+                               multiple
+                               style="display:none"
+                               accept=".jpg,.jpeg,.png,.webp"
+                               disabled="@PageBusy"
+                               @onchange="OnToolbarPhotoNativeChanged" />
+                    </label>
+                </div>
+            </div>
+
+            @if (_uploading)
+            {
+                <div style="margin-top:12px; max-width:720px;">
+                    <div class="admin-help">@_uploadLabel</div>
+                    <div style="height:10px; border-radius:999px; overflow:hidden; background:rgba(10,10,10,0.08); margin-top:8px;">
+                        <div style="height:100%; width:@($"{_uploadPercent:0}%"); background:var(--a-accent); transition:width 0.12s;"></div>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_uploadSummary))
+                    {
+                        <div class="admin-help" style="margin-top:6px;">@_uploadSummary</div>
+                    }
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_uploadError))
+            {
+                <div class="admin-error-box" style="margin-top:12px;">@_uploadError</div>
+            }
+
+            <div class="admin-divider" style="margin:18px 0 14px;"></div>
+
+            @if (photos.Count == 0)
+            {
+                <div class="admin-empty admin-dotgrid">
+                    <div style="font-weight:650; letter-spacing:-0.01em;">Нет фотографий</div>
+                    <div class="admin-help" style="margin-top:6px;">Нажмите “Загрузить фото”, чтобы добавить первые снимки.</div>
+                </div>
+            }
+            else
+            {
+                <div class="admin-photos-grid">
+                    @foreach (var photo in photos)
+                    {
+                        <div class="admin-photo-tile">
+                            <img src="@GetFullUrl(photo.Url)" alt="@photo.OriginalFileName" loading="lazy" />
+                            <button type="button" class="admin-photo-tile__delete" disabled="@PageBusy"
+                                    @onclick="() => DeletePhoto(photo.Id)" title="Удалить">
+                                @if (_deletingPhotoId == photo.Id)
+                                {
+                                    <span style="font-size:0.75rem;">…</span>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.Delete" />
+                                }
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+
+</AuthGuard>
+
+@code {
+
+    [Parameter] public int Id { get; set; }
+
+    AlbumDto? album;
+    List<PhotoDto> photos = new();
+
+    bool _isLoaded;
+    ElementReference _coverInputRef;
+    ElementReference _toolbarPhotoInputRef;
+    DotNetObjectReference<AlbumDetails>? _toolbarUploadDotNet;
+    string _toolbarPendingFileName = "";
+    string _uploadSummary = "";
+
+    bool _uploading;
+    double _uploadPercent;
+    string _uploadLabel = "";
+    string? _uploadError;
+
+    bool _savingAlbum;
+    bool _deletingAlbum;
+    int? _deletingPhotoId;
+    string? _albumFormError;
+
+    DotNetObjectReference<AlbumDetails>? _albumCoverSaveProgressRef;
+    double _albumCoverSavePct;
+    string _albumCoverSaveLabel = "";
+
+    bool PageBusy => _uploading || _savingAlbum || _deletingAlbum || _deletingPhotoId.HasValue;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isLoaded)
+        {
+            _isLoaded = true;
+
+            await LoadAlbum();
+            await LoadPhotos();
+
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnAlbumPhotosSequentialProgress(long loaded, long total, int fileIndex, int fileCount, string fileName)
+    {
+        var n = Math.Max(1, fileCount);
+        var slice = 100.0 / n;
+        double withinFile;
+        if (total > 0)
+            withinFile = (double)loaded / total;
+        else
+            withinFile = loaded > 0 ? 0.35 : 0;
+
+        _uploadPercent = Math.Clamp(fileIndex * slice + withinFile * slice, 0, 100);
+        _toolbarPendingFileName = fileName;
+        _uploadLabel = $"Фото {fileIndex + 1}/{fileCount}: {fileName} · {_uploadPercent:0}%";
+        _uploadSummary = fileCount > 1 ? $"очередь из {fileCount}" : "";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnAlbumCoverSaveProgress(long loaded, long total)
+    {
+        if (total > 0)
+            _albumCoverSavePct = Math.Clamp((double)loaded / total * 100.0, 0, 100);
+        else
+            _albumCoverSavePct = Math.Clamp(Math.Log10(Math.Max(1, loaded)) * 22.0, 10, 92);
+        _albumCoverSaveLabel = $"Обложка альбома · {_albumCoverSavePct:0}%";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    async Task<HttpClient> GetClient()
+    {
+        var client = HttpFactory.CreateClient("API");
+
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return client;
+    }
+
+    async Task LoadAlbum()
+    {
+        var client = await GetClient();
+
+        var response = await client.GetAsync($"api/albums/{Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            album = await response.Content.ReadFromJsonAsync<AlbumDto>();
+        }
+        else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    async Task LoadPhotos()
+    {
+        var client = await GetClient();
+
+        var response = await client.GetAsync($"api/Photos/album/{Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            var data = await response.Content.ReadFromJsonAsync<List<PhotoDto>>();
+            if (data != null)
+                photos = data;
+        }
+    }
+
+    async Task OnToolbarPhotoNativeChanged()
+    {
+        if (PageBusy)
+            return;
+
+        var firstName = await JS.InvokeAsync<string>("photosite.inputFirstFileName", _toolbarPhotoInputRef);
+        if (string.IsNullOrWhiteSpace(firstName))
+            return;
+
+        _uploadError = null;
+        _uploading = true;
+        _uploadPercent = 0;
+        _toolbarPendingFileName = firstName;
+        _uploadLabel = "Подготовка…";
+        _uploadSummary = "";
+        await InvokeAsync(StateHasChanged);
+
+        _toolbarUploadDotNet = DotNetObjectReference.Create(this);
+        try
+        {
+            var token = await Api.GetJwtFromBrowserAsync(JS) ?? "";
+            var r = await Api.UploadAlbumPhotosSequentialFromBrowserAsync(
+                JS,
+                Id,
+                _toolbarPhotoInputRef,
+                _toolbarUploadDotNet,
+                nameof(OnAlbumPhotosSequentialProgress),
+                token);
+
+            if (r.Status == 401)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (!r.Ok)
+            {
+                if (r.Uploaded > 0 && r.Total > 0)
+                {
+                    _uploadError = $"Загружено {r.Uploaded} из {r.Total}. Дальше сервер ответил HTTP {r.Status}.";
+                    await LoadPhotos();
+                }
+                else
+                    _uploadError = r.Total == 0 ? "Файлы не выбраны." : "Не удалось загрузить фото.";
+            }
+            else
+            {
+                _uploadPercent = 100;
+                _uploadLabel = "Готово";
+                _uploadSummary = r.Total > 1 ? $"{r.Total} файлов загружено" : "";
+                await LoadPhotos();
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Ошибка загрузки: {ex.Message}";
+        }
+        finally
+        {
+            _toolbarUploadDotNet?.Dispose();
+            _toolbarUploadDotNet = null;
+            try
+            {
+                await Api.ClearBrowserFileInputAsync(JS, _toolbarPhotoInputRef);
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            _uploading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    async Task DeletePhoto(int photoId)
+    {
+        if (PageBusy)
+            return;
+
+        _deletingPhotoId = photoId;
+        _uploadError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var client = await GetClient();
+            var response = await client.DeleteAsync($"api/photos/{photoId}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+                photos.RemoveAll(p => p.Id == photoId);
+            else
+                _uploadError = "Не удалось удалить фото.";
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Ошибка удаления: {ex.Message}";
+        }
+        finally
+        {
+            _deletingPhotoId = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    async Task UpdateAlbum()
+    {
+        if (album == null || PageBusy)
+            return;
+
+        _albumFormError = null;
+        _savingAlbum = true;
+        _albumCoverSavePct = 0;
+        _albumCoverSaveLabel = "Подготовка…";
+        await InvokeAsync(StateHasChanged);
+
+        _albumCoverSaveProgressRef = DotNetObjectReference.Create(this);
+        try
+        {
+            var fields = new List<(string Name, string Value)>
+            {
+                ("Title", album.Title ?? ""),
+                ("Description", album.Description ?? ""),
+            };
+            var token = await Api.GetJwtFromBrowserAsync(JS) ?? "";
+            var r = await Api.UploadMultipartFromBrowserAsync(
+                JS,
+                "PUT",
+                $"/api/albums/{Id}",
+                fields,
+                _coverInputRef,
+                "coverFile",
+                _albumCoverSaveProgressRef,
+                nameof(OnAlbumCoverSaveProgress),
+                token);
+
+            if (r.Status == 401)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            if (r.Ok)
+            {
+                await Api.ClearBrowserFileInputAsync(JS, _coverInputRef);
+                await LoadAlbum();
+            }
+            else
+            {
+                _albumFormError = "Не удалось сохранить альбом.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _albumFormError = $"Ошибка сохранения: {ex.Message}";
+        }
+        finally
+        {
+            _albumCoverSaveProgressRef?.Dispose();
+            _albumCoverSaveProgressRef = null;
+            _albumCoverSavePct = 0;
+            _albumCoverSaveLabel = "";
+            _savingAlbum = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    async Task DeleteAlbum()
+    {
+        if (PageBusy)
+            return;
+
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("confirm", "Удалить этот альбом? Все фотографии внутри тоже будут удалены.");
+            if (!ok)
+                return;
+
+            _deletingAlbum = true;
+            await InvokeAsync(StateHasChanged);
+
+            var client = await GetClient();
+            var response = await client.DeleteAsync($"api/albums/{Id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/admin/albums");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _deletingAlbum = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    string GetFullUrl(string url) => Api.ToBrowserAssetUrl(url);
+
+    class AlbumDto
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    class PhotoDto
+    {
+        public int Id { get; set; }
+        public string OriginalFileName { get; set; } = "";
+        public string Url { get; set; } = "";
+    }
+}

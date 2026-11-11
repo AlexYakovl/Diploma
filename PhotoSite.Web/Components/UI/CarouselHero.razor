@@ -1,0 +1,227 @@
+@inject ApiService Api
+@inject AuthStateService AuthState
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+
+<div class="hero-carousel">
+
+    @if (_photos.Count == 0)
+    {
+        <div class="hero-placeholder">
+            <MudIcon Icon="@Icons.Material.Outlined.CameraAlt"
+                     Style="font-size:3rem; opacity:0.2; margin-bottom:12px;" />
+        </div>
+    }
+    else
+    {
+        @for (var i = 0; i < _photos.Count; i++)
+        {
+            var idx = i;
+            <div class="hero-slide @(idx == _current ? "active" : "")">
+                <img src="@Api.GetHeroPhotoUrl(_photos[idx].Id)" alt="Hero @(idx + 1)" loading="eager" />
+            </div>
+        }
+    }
+
+    <div class="hero-content">
+        <p class="hero-title">Мария Яковлева</p>
+    </div>
+
+    @if (_photos.Count > 1)
+    {
+        <div class="hero-dots">
+            @for (var i = 0; i < _photos.Count; i++)
+            {
+                var idx = i;
+                <button class="hero-dot @(idx == _current ? "active" : "")"
+                        disabled="@_heroBusy"
+                        @onclick="() => GoTo(idx)"></button>
+            }
+        </div>
+    }
+
+    @if (_isAdmin)
+    {
+        <div class="hero-admin-controls @(_heroBusy ? "hero-admin-controls--busy" : null)">
+            <div class="hero-admin-controls__fab-row">
+                <input type="file"
+                       id="heroUpload"
+                       @ref="_heroInputRef"
+                       style="display:none"
+                       accept=".jpg,.jpeg,.png,.webp"
+                       disabled="@_heroBusy"
+                       @onchange="OnHeroNativeChanged" />
+                <MudTooltip Text="@(_heroBusy ? "Подождите…" : "Добавить фото")">
+                    <MudFab StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+                            Disabled="@_heroBusy"
+                            Style="background:rgba(255,255,255,0.88); color:#0a0a0a; min-width:0;"
+                            OnClick="OpenHeroUpload" />
+                </MudTooltip>
+
+                @if (_photos.Count > 0)
+                {
+                    <MudTooltip Text="@(_heroBusy ? "Подождите…" : "Удалить текущее фото")">
+                        <MudFab StartIcon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                Disabled="@_heroBusy"
+                                Style="background:rgba(255,255,255,0.88); color:#b00020; min-width:0;"
+                                OnClick="DeleteCurrent" />
+                    </MudTooltip>
+                }
+            </div>
+            @if (_heroBusy && (!string.IsNullOrWhiteSpace(_heroUploadLabel) || _heroUploadPct > 0))
+            {
+                <div class="photosite-upload-progress hero-upload-progress">
+                    <div class="photosite-upload-progress__label" style="color:rgba(255,255,255,0.92);text-shadow:0 1px 4px rgba(0,0,0,0.35);">@_heroUploadLabel</div>
+                    <div class="photosite-upload-progress__track" style="background:rgba(255,255,255,0.25);">
+                        <div class="photosite-upload-progress__fill" style="background:#fff;width:@($"{_heroUploadPct:0}%")"></div>
+                    </div>
+                    <div class="photosite-upload-progress__pct" style="color:rgba(255,255,255,0.85);">@_heroUploadPct.ToString("0")%</div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<HeroPhotoDto> _photos = new();
+    private int _current = 0;
+    private bool _isAdmin = false;
+    private bool _heroBusy;
+    private ElementReference _heroInputRef;
+    private Timer? _timer;
+    private DotNetObjectReference<CarouselHero>? _heroUploadProgressRef;
+    private double _heroUploadPct;
+    private string _heroUploadLabel = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _isAdmin = await AuthState.IsAdminAsync(JS);
+        _photos = await Api.GetHeroPhotosAsync();
+        StartTimer();
+        StateHasChanged();
+    }
+
+    private void StartTimer()
+    {
+        _timer?.Dispose();
+        if (_photos.Count <= 1 || _heroBusy) return;
+        _timer = new Timer(_ =>
+        {
+            _current = (_current + 1) % _photos.Count;
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    [JSInvokable]
+    public void OnHeroUploadProgress(long loaded, long total)
+    {
+        if (total > 0)
+            _heroUploadPct = Math.Clamp((double)loaded / total * 100.0, 0, 100);
+        else
+            _heroUploadPct = Math.Clamp(Math.Log10(Math.Max(1, loaded)) * 22.0, 10, 92);
+        _heroUploadLabel = $"Загрузка в карусель · {_heroUploadPct:0}%";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void StopTimer()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    private void GoTo(int idx)
+    {
+        if (_heroBusy) return;
+        _current = idx;
+        _timer?.Change(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    private async Task OnHeroNativeChanged()
+    {
+        var name = await JS.InvokeAsync<string>("photosite.inputFirstFileName", _heroInputRef);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        _heroBusy = true;
+        StopTimer();
+        _heroUploadPct = 0;
+        _heroUploadLabel = "Подготовка…";
+        StateHasChanged();
+
+        _heroUploadProgressRef = DotNetObjectReference.Create(this);
+        try
+        {
+            var token = await Api.GetJwtFromBrowserAsync(JS) ?? "";
+            var r = await Api.UploadMultipartFromBrowserAsync(
+                JS,
+                "POST",
+                "/api/Hero/upload",
+                Array.Empty<(string, string)>(),
+                _heroInputRef,
+                "file",
+                _heroUploadProgressRef,
+                nameof(OnHeroUploadProgress),
+                token);
+
+            if (r.Ok)
+            {
+                _photos = await Api.GetHeroPhotosAsync();
+                _current = _photos.Count > 0 ? _photos.Count - 1 : 0;
+            }
+        }
+        finally
+        {
+            try
+            {
+                await Api.ClearBrowserFileInputAsync(JS, _heroInputRef);
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            _heroUploadProgressRef?.Dispose();
+            _heroUploadProgressRef = null;
+            _heroUploadPct = 0;
+            _heroUploadLabel = "";
+
+            _heroBusy = false;
+            StartTimer();
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenHeroUpload()
+    {
+        if (_heroBusy) return;
+        await JS.InvokeVoidAsync("photosite.clickById", "heroUpload");
+    }
+
+    private async Task DeleteCurrent()
+    {
+        if (_photos.Count == 0 || _heroBusy) return;
+
+        _heroBusy = true;
+        StopTimer();
+        try
+        {
+            var id = _photos[_current].Id;
+            await Api.DeleteHeroPhotoAsync(id, JS);
+            _photos = await Api.GetHeroPhotosAsync();
+            _current = _photos.Count > 0 ? Math.Min(_current, _photos.Count - 1) : 0;
+        }
+        finally
+        {
+            _heroBusy = false;
+            StartTimer();
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        await Task.CompletedTask;
+    }
+}

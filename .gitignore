@@ -1,0 +1,66 @@
+# ---------------------------
+# .NET / Visual Studio / Rider
+# ---------------------------
+.vs/
+.vscode/
+.idea/
+.fleet/
+
+**/bin/
+**/obj/
+**/[Bb]in/
+**/[Oo]bj/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.pidb
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# ---------------------------
+# Build artifacts / publish
+# ---------------------------
+**/artifacts/
+**/publish/
+**/out/
+
+# ---------------------------
+# OS junk
+# ---------------------------
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ---------------------------
+# Secrets / local config
+# ---------------------------
+**/secrets.json
+**/*.pfx
+**/*.pem
+**/*.key
+**/.env
+**/.env.*
+!**/.env.example
+**/appsettings*.json
+!**/appsettings.example.json
+
+# ---------------------------
+# Runtime storage (uploaded photos)
+# Keep out of git (use volumes/backups in prod)
+# ---------------------------
+Storage/
+PhotoSite.Api/Storage/
+
+# ---------------------------
+# Logs
+# ---------------------------
+**/*.log
+
+# ---------------------------
+# Optional: local docker overrides
+# ---------------------------
+docker-compose.override.yml

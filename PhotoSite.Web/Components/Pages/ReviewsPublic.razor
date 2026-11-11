@@ -1,0 +1,248 @@
+@page "/reviews"
+@using System.Net
+@inject ApiService Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Отзывы — Мария Яковлева</PageTitle>
+
+<div class="page-header">
+    <span class="section-label"></span>
+</div>
+
+<div class="container" style="padding-bottom:80px;">
+
+    @if (_loadingReviews)
+    {
+        <div style="text-align:center; padding:60px 0;">
+            <MudProgressCircular Indeterminate="true" Color="Color.Dark" />
+        </div>
+    }
+    else if (_reviews.Count == 0)
+    {
+        <div style="text-align:center; padding:60px 0;">
+            <MudIcon Icon="@Icons.Material.Outlined.RateReview"
+                     Style="font-size:3.5rem; color:#ccc; display:block; margin:0 auto 12px;" />
+            <p style="color:#aaa; margin:0;">Пока нет отзывов. Будьте первым!</p>
+        </div>
+    }
+    else
+    {
+        <MudGrid Spacing="4" Class="photosite-grid-singlecol-md" Style="margin-bottom:56px;">
+            @foreach (var rv in _reviews)
+            {
+                <MudItem xs="12" md="4">
+                    <div class="review-card">
+                        <div class="review-card__media">
+                            @if (!string.IsNullOrEmpty(rv.AvatarPath))
+                            {
+                                <img src="@Api.GetReviewAvatarUrl(rv.Id)" class="review-avatar" alt="@rv.Author" />
+                            }
+                            else
+                            {
+                                <div class="review-avatar review-avatar--placeholder" aria-hidden="true">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person"
+                                             Class="review-avatar__icon" />
+                                </div>
+                            }
+                        </div>
+                        <p class="review-author">@rv.Author</p>
+                        @if (rv.AlbumId.HasValue && !string.IsNullOrWhiteSpace(rv.AlbumTitle))
+                        {
+                            <a class="review-album-link" href="@($"/portfolio/{rv.AlbumId.Value}")">
+                                @rv.AlbumTitle
+                            </a>
+                        }
+                        <MudIcon Icon="@Icons.Material.Filled.FormatQuote" Class="review-quote-icon" />
+                        <p class="review-text">@rv.Text</p>
+                        <p class="review-date">@rv.CreatedAt.ToString("MMMM yyyy")</p>
+                    </div>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    <!-- Submit form -->
+    <MudDivider Style="margin-bottom:48px;" />
+    <div class="reviews-submit-form" style="max-width:540px; margin:0 auto;">
+        <div style="text-align:center; margin-bottom:32px;">
+            <h2 class="display-title" style="font-size:1.8rem; margin-top:8px;">Оставить отзыв</h2>
+            <p style="font-size:0.85rem; color:#888; margin:8px 0 0;">
+                Отзыв появится на сайте после модерации.
+            </p>
+        </div>
+
+        <MudTextField @bind-Value="_form.Author" Label="Ваше имя" Variant="Variant.Outlined"
+                      Required="true" Class="reviews-form-field" MaxLength="120" />
+        <MudSelect T="int?" Label="Альбом (необязательно)" Variant="Variant.Outlined" Class="reviews-form-field"
+                   @bind-Value="_form.AlbumId">
+            <MudSelectItem T="int?" Value="@(null)">Не выбирать</MudSelectItem>
+            @foreach (var a in _albums)
+            {
+                <MudSelectItem T="int?" Value="@(a.Id)">@a.Title</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_form.Text" Label="Текст отзыва" Variant="Variant.Outlined"
+                      Lines="5" Required="true" Class="reviews-form-field" MaxLength="2000" />
+
+        <div class="reviews-form-file">
+            <input type="file"
+                   id="reviewAvatarUpload"
+                   @ref="_reviewAvatarInputRef"
+                   accept=".jpg,.jpeg,.png,.webp"
+                   style="display:none"
+                   @onchange="OnReviewAvatarPicked" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                       StartIcon="@Icons.Material.Outlined.CameraAlt"
+                       FullWidth="true"
+                       Style="border-style:dashed; font-size:0.85rem;"
+                       OnClick="PickReviewAvatarAsync">
+                @(_avatarPickName == null ? "Загрузить аватарку (необязательно)" : "Аватарка: " + _avatarPickName)
+            </MudButton>
+        </div>
+
+        @if (_submitting && !string.IsNullOrWhiteSpace(_avatarPickName))
+        {
+            <div class="photosite-upload-progress reviews-submit-progress">
+                <div class="photosite-upload-progress__label">@_reviewSubmitLabel</div>
+                <div class="photosite-upload-progress__track">
+                    <div class="photosite-upload-progress__fill" style="width:@($"{_reviewSubmitPct:0}%")"></div>
+                </div>
+                <div class="photosite-upload-progress__pct">@_reviewSubmitPct.ToString("0")%</div>
+            </div>
+        }
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SubmitReview" Disabled="_submitting" FullWidth="true"
+                   Size="Size.Large" Style="letter-spacing:0.06em;">
+            @if (_submitting)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                <span>Отправляем…</span>
+            }
+            else
+            {
+                <span>Отправить отзыв</span>
+            }
+        </MudButton>
+    </div>
+</div>
+
+@code {
+    private List<ReviewDto> _reviews = new();
+    private bool _loadingReviews = true;
+
+    private ReviewFormModel _form = new();
+    private string? _avatarPickName;
+    private ElementReference _reviewAvatarInputRef;
+    private bool _submitting = false;
+    private List<AlbumDto> _albums = new();
+
+    private Microsoft.JSInterop.DotNetObjectReference<ReviewsPublic>? _reviewSubmitProgressRef;
+    private double _reviewSubmitPct;
+    private string _reviewSubmitLabel = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _albums = await Api.GetAlbumsAsync();
+        _reviews = await Api.GetPublicReviewsAsync();
+        _loadingReviews = false;
+    }
+
+    private async Task PickReviewAvatarAsync()
+    {
+        if (_submitting) return;
+        await JS.InvokeVoidAsync("photosite.clickById", "reviewAvatarUpload");
+    }
+
+    private async Task OnReviewAvatarPicked()
+    {
+        var name = await JS.InvokeAsync<string>("photosite.inputFirstFileName", _reviewAvatarInputRef);
+        _avatarPickName = string.IsNullOrWhiteSpace(name) ? null : name;
+        StateHasChanged();
+    }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public void OnReviewSubmitProgress(long loaded, long total)
+    {
+        if (total > 0)
+            _reviewSubmitPct = Math.Clamp((double)loaded / total * 100.0, 0, 100);
+        else
+            _reviewSubmitPct = Math.Clamp(Math.Log10(Math.Max(1, loaded)) * 22.0, 10, 92);
+        _reviewSubmitLabel = $"Отправка отзыва с фото · {_reviewSubmitPct:0}%";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SubmitReview()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Author) || string.IsNullOrWhiteSpace(_form.Text))
+        {
+            Snackbar.Add("Пожалуйста, заполните имя и текст отзыва.", Severity.Warning);
+            return;
+        }
+
+        _submitting = true;
+        _reviewSubmitPct = 0;
+        _reviewSubmitLabel = string.IsNullOrWhiteSpace(_avatarPickName) ? "" : "Подготовка…";
+        StateHasChanged();
+
+        _reviewSubmitProgressRef = string.IsNullOrWhiteSpace(_avatarPickName)
+            ? null
+            : Microsoft.JSInterop.DotNetObjectReference.Create(this);
+
+        try
+        {
+            Task<(bool Ok, HttpStatusCode Status, string? Body)> resultTask =
+                string.IsNullOrWhiteSpace(_avatarPickName)
+                    ? Api.SubmitReviewFromBrowserAsync(JS, _form.Author, _form.Text, _form.AlbumId, null)
+                    : Api.SubmitReviewFromBrowserAsync(
+                        JS,
+                        _form.Author,
+                        _form.Text,
+                        _form.AlbumId,
+                        _reviewAvatarInputRef,
+                        _reviewSubmitProgressRef,
+                        nameof(OnReviewSubmitProgress));
+
+            var result = await resultTask;
+
+            if (result.Ok)
+            {
+                Snackbar.Add("Спасибо! Отзыв отправлен на модерацию.", Severity.Success);
+                _form = new();
+                _avatarPickName = null;
+                try
+                {
+                    await Api.ClearBrowserFileInputAsync(JS, _reviewAvatarInputRef);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+            else
+            {
+                var msg = string.IsNullOrWhiteSpace(result.Body)
+                    ? "Не удалось отправить. Попробуйте ещё раз."
+                    : result.Body.Trim().Trim('"');
+
+                Snackbar.Add(msg, Severity.Error);
+            }
+        }
+        finally
+        {
+            _reviewSubmitProgressRef?.Dispose();
+            _reviewSubmitProgressRef = null;
+            _reviewSubmitPct = 0;
+            _reviewSubmitLabel = "";
+            _submitting = false;
+        }
+    }
+
+    private class ReviewFormModel
+    {
+        public string Author { get; set; } = "";
+        public string Text   { get; set; } = "";
+        public int? AlbumId { get; set; }
+    }
+}

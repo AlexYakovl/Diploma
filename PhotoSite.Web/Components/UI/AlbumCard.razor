@@ -1,0 +1,100 @@
+@implements IDisposable
+@using PhotoSite.Web.Components.Services
+@inject ApiService Api
+@inject IJSRuntime JS
+@inject AlbumCardRevealState RevealState
+
+<div class="album-card-wrap album-card-wrap--portfolio">
+    <div class="album-card-public album-card--square @(_isRevealed ? "is-revealed" : null)"
+         @onclick="HandleTap">
+
+        @if (!string.IsNullOrEmpty(CoverPath))
+        {
+            <img src="@Api.GetCoverUrl(AlbumId)" alt="@Title" loading="lazy" />
+        }
+        else
+        {
+            <div class="album-no-cover"
+                 style="display:flex; align-items:center; justify-content:center; background:#1a1a1a;">
+                <MudIcon Icon="@Icons.Material.Outlined.PhotoAlbum"
+                         Style="font-size:2.5rem; color:#3a3a3a; position:relative; z-index:1;" />
+            </div>
+        }
+
+        <div class="album-card-overlay album-card-overlay--reveal" aria-hidden="true">
+            <div class="album-reveal-bundle">
+                <div class="album-reveal-rect"></div>
+                <div class="album-title-layer">
+                    <p class="album-title-line">
+                    @if (!string.IsNullOrEmpty(Title))
+                    {
+                        @for (var i = 0; i < Title.Length; i++)
+                        {
+                            var idx = i;
+                            var ch = Title[idx];
+                            <span class="album-card-title-char" style="@($"--i: {idx};")">@((ch == ' ') ? "\u00A0" : ch.ToString())</span>
+                        }
+                    }
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int AlbumId  { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description          { get; set; }
+    [Parameter] public string? CoverPath            { get; set; }
+    [Parameter] public EventCallback OnClick        { get; set; }
+
+    private bool _touchLike;
+    private bool _touchLikeChecked;
+    private bool _isRevealed;
+
+    protected override void OnInitialized()
+    {
+        RevealState.Changed += OnRevealStateChanged;
+        _isRevealed = RevealState.RevealedAlbumId == AlbumId;
+    }
+
+    public void Dispose()
+    {
+        RevealState.Changed -= OnRevealStateChanged;
+    }
+
+    private void OnRevealStateChanged()
+    {
+        var next = RevealState.RevealedAlbumId == AlbumId;
+        if (_isRevealed == next) return;
+        _isRevealed = next;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_touchLikeChecked)
+        {
+            _touchLikeChecked = true;
+            try { _touchLike = await JS.InvokeAsync<bool>("photosite.isTouchLike"); }
+            catch { _touchLike = false; }
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleTap()
+    {
+        if (!_touchLike)
+        {
+            await OnClick.InvokeAsync();
+            return;
+        }
+
+        // First tap reveals the title overlay (and hides any other revealed album).
+        // Second tap navigates.
+        if (!_isRevealed) { RevealState.Reveal(AlbumId); return; }
+
+        await OnClick.InvokeAsync();
+    }
+}

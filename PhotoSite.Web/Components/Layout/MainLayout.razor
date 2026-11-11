@@ -1,0 +1,26 @@
+﻿@using PhotoSite.Web.Components.UI
+@inherits LayoutComponentBase
+
+@* MudBlazor providers must live inside the interactive circuit (not static App.razor) *@
+<MudThemeProvider Theme="@_theme" DefaultScrollbar="true" />
+<MudPopoverProvider />
+<MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <AppNavbar />
+    <MudMainContent Style="min-height:100vh; display:flex; flex-direction:column;">
+        <div class="js-main-image-gate"
+             style="flex:1 1 auto; display:flex; flex-direction:column; position:relative; min-height:0;">
+            <div class="js-main-image-gate__body" style="flex:1 1 auto;">
+                @Body
+            </div>
+            <AppFooter />
+            <div class="js-main-image-gate__overlay @(_overlayVisible ? "js-main-image-gate__overlay--visible" : null)"
+                 aria-hidden="@(!_overlayVisible)"
+                 aria-busy="@_overlayVisible">
+                <div class="js-main-image-gate__spinner" aria-label="Загрузка изображений"></div>
+            </div>
+        </div>
+    </MudMainContent>
+</MudLayout>
