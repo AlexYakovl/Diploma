@@ -1,0 +1,42 @@
+name: Тесты .NET
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Сборка и тесты
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Установить .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Восстановить пакеты
+        run: dotnet restore PhotoSite.sln
+
+      - name: Собрать Release
+        run: dotnet build PhotoSite.sln --no-restore --configuration Release
+
+      - name: Запустить тесты
+        run: dotnet test PhotoSite.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+
+      - name: Опубликовать результаты тестов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosite-test-results
+          path: TestResults/**
+          if-no-files-found: error

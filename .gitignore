@@ -64,3 +64,8 @@ PhotoSite.Api/Storage/
 # Optional: local docker overrides
 # ---------------------------
 docker-compose.override.yml
+# Артефакты тестирования
+TestResults/
+coverage/
+*.cobertura.xml
+*.opencover.xml
